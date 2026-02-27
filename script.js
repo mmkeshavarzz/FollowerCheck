@@ -1,123 +1,103 @@
 /**
  * ============================================
- *  Follow Analyzer - Core Application Logic
+ *  Follow Analyzer v2.1 - Core Engine
  * ============================================
- *  تحلیل فالوورها و فالووینگ‌های اینستاگرام
- *  بر اساس فایل‌های JSON خروجی اکانت
- * 
- *  ویژگی‌ها:
- *   - پارس و مقایسه خودکار فایل‌ها
- *   - ذخیره‌سازی محلی (localStorage)
- *   - خروجی PNG با html2canvas
- *   - دراگ اند دراپ فایل
- *   - جستجو در لیست
+ *  تحلیلگر فالوورها و فالووینگ‌های اینستاگرام
+ *
+ *  ⚙️ فرمت‌های پشتیبانی‌شده:
+ *   1. آرایه با string_list_data (فرمت 2023-2026)
+ *   2. آبجکت با relationships_following
+ *   3. آرایه ساده از آبجکت‌ها با value/username
+ *
+ *  📦 ذخیره‌سازی: localStorage
+ *  📸 خروجی: PNG با html2canvas
  * ============================================
  */
 
 (function () {
     'use strict';
 
-    /* ----------------------------------------- */
-    /* متغیرهای سراسری و نگهداری وضعیت            */
-    /* ----------------------------------------- */
+    /* ─── State Management ─── */
 
-    /** @type {Array} لیست یوزرنیم‌های فالوورها */
-    let followersData = [];
-
-    /** @type {Array} لیست یوزرنیم‌های فالووینگ‌ها */
-    let followingData = [];
-
-    /** @type {Object} نتایج تحلیل */
-    let analysisResults = {
-        notFollowingBack: [],  // فالوبک نکرده‌ها
-        mutual: [],            // دوطرفه
-        fans: []               // فن‌ها (ما فالو نکردیم ولی فالومون کردن)
+    var state = {
+        followers: [],      // آرایه یوزرنیم فالوورها
+        following: [],      // آرایه یوزرنیم فالووینگ‌ها
+        results: {
+            notFollowingBack: [],
+            mutual: [],
+            fans: []
+        },
+        currentTab: 'not-following-back'
     };
 
-    /** @type {string} تب فعال فعلی */
-    let currentTab = 'not-following-back';
+    /* ─── DOM References ─── */
 
-    /* ----------------------------------------- */
-    /* ارجاع به المنت‌های DOM                      */
-    /* ----------------------------------------- */
-    const DOM = {
-        followersInput: document.getElementById('followers-input'),
-        followingInput: document.getElementById('following-input'),
-        followersDropZone: document.getElementById('followers-drop-zone'),
-        followingDropZone: document.getElementById('following-drop-zone'),
-        followersStatus: document.getElementById('followers-status'),
-        followingStatus: document.getElementById('following-status'),
-        followersCard: document.getElementById('followers-upload-card'),
-        followingCard: document.getElementById('following-upload-card'),
-        analyzeBtn: document.getElementById('analyze-btn'),
-        clearBtn: document.getElementById('clear-btn'),
-        exportBtn: document.getElementById('export-btn'),
-        resultsSection: document.getElementById('results-section'),
-        statsContainer: document.getElementById('stats-container'),
-        searchInput: document.getElementById('search-input'),
+    var el = {};
+
+    function _cacheDom() {
+        el.followersInput   = document.getElementById('followers-input');
+        el.followingInput   = document.getElementById('following-input');
+        el.followersDrop    = document.getElementById('followers-drop-zone');
+        el.followingDrop    = document.getElementById('following-drop-zone');
+        el.followersStatus  = document.getElementById('followers-status');
+        el.followingStatus  = document.getElementById('following-status');
+        el.followersCard    = document.getElementById('followers-upload-card');
+        el.followingCard    = document.getElementById('following-upload-card');
+        el.analyzeBtn       = document.getElementById('analyze-btn');
+        el.clearBtn         = document.getElementById('clear-btn');
+        el.exportBtn        = document.getElementById('export-btn');
+        el.demoBtn          = document.getElementById('demo-btn');
+        el.resultsSection   = document.getElementById('results-section');
+        el.debugSection     = document.getElementById('debug-section');
+        el.debugOutput      = document.getElementById('debug-output');
+        el.searchInput      = document.getElementById('search-input');
         // آمار
-        statFollowers: document.getElementById('stat-followers'),
-        statFollowing: document.getElementById('stat-following'),
-        statNotBack: document.getElementById('stat-not-back'),
-        statMutual: document.getElementById('stat-mutual'),
-        statFans: document.getElementById('stat-fans'),
-        statRatio: document.getElementById('stat-ratio'),
+        el.statFollowers    = document.getElementById('stat-followers');
+        el.statFollowing    = document.getElementById('stat-following');
+        el.statNotBack      = document.getElementById('stat-not-back');
+        el.statMutual       = document.getElementById('stat-mutual');
+        el.statFans         = document.getElementById('stat-fans');
+        el.statRatio        = document.getElementById('stat-ratio');
+        // شمارنده تب‌ها
+        el.tabCountNfb      = document.getElementById('tab-count-nfb');
+        el.tabCountMutual   = document.getElementById('tab-count-mutual');
+        el.tabCountFans     = document.getElementById('tab-count-fans');
         // لیست‌ها
-        listNotFollowingBack: document.getElementById('list-not-following-back'),
-        listMutual: document.getElementById('list-mutual'),
-        listFans: document.getElementById('list-fans')
-    };
-
-    /* ----------------------------------------- */
-    /* مقداردهی اولیه (Initialize)                 */
-    /* ----------------------------------------- */
-    function init() {
-        _loadFromStorage();
-        _bindEvents();
-        _updateButtonStates();
-
-        // اگه قبلاً نتایجی بود نشونشون بده
-        if (followersData.length > 0 && followingData.length > 0) {
-            _runAnalysis();
-        }
+        el.listNfb          = document.getElementById('list-not-following-back');
+        el.listMutual       = document.getElementById('list-mutual');
+        el.listFans         = document.getElementById('list-fans');
     }
 
-    /* ----------------------------------------- */
-    /* بایند کردن ایونت‌ها                          */
-    /* ----------------------------------------- */
+    /* ─── Initialization ─── */
+
+    function init() {
+        _cacheDom();
+        _bindEvents();
+        _loadFromStorage();
+        _updateUI();
+    }
+
+    /* ─── Event Binding ─── */
+
     function _bindEvents() {
-        // ایونت آپلود فایل فالوورها
-        DOM.followersInput.addEventListener('change', function (e) {
-            _handleFileUpload(e.target.files[0], 'followers');
+        // آپلود فایل
+        el.followersInput.addEventListener('change', function (e) {
+            if (e.target.files[0]) _processFile(e.target.files[0], 'followers');
         });
 
-        // ایونت آپلود فایل فالووینگ‌ها
-        DOM.followingInput.addEventListener('change', function (e) {
-            _handleFileUpload(e.target.files[0], 'following');
+        el.followingInput.addEventListener('change', function (e) {
+            if (e.target.files[0]) _processFile(e.target.files[0], 'following');
         });
 
-        // دراگ اند دراپ برای فالوورها
-        _setupDropZone(DOM.followersDropZone, DOM.followersInput, 'followers');
+        // دراگ اند دراپ
+        _initDropZone(el.followersDrop, 'followers');
+        _initDropZone(el.followingDrop, 'following');
 
-        // دراگ اند دراپ برای فالووینگ‌ها
-        _setupDropZone(DOM.followingDropZone, DOM.followingInput, 'following');
-
-        // دکمه تحلیل
-        DOM.analyzeBtn.addEventListener('click', function () {
-            _showLoading('در حال تحلیل... 🔍');
-            // کمی تأخیر برای نمایش لودینگ
-            setTimeout(function () {
-                _runAnalysis();
-                _hideLoading();
-                _showToast('تحلیل انجام شد! حالا ببین کیا بی‌معرفتن 😈', 'success');
-            }, 800);
-        });
-
-        // دکمه پاک کردن
-        DOM.clearBtn.addEventListener('click', _clearAll);
-
-        // دکمه خروجی PNG
-        DOM.exportBtn.addEventListener('click', _exportPNG);
+        // دکمه‌ها
+        el.analyzeBtn.addEventListener('click', _onAnalyze);
+        el.clearBtn.addEventListener('click', _onClear);
+        el.exportBtn.addEventListener('click', _onExport);
+        el.demoBtn.addEventListener('click', _onDemo);
 
         // تب‌ها
         document.querySelectorAll('.tab-btn').forEach(function (btn) {
@@ -127,65 +107,43 @@
         });
 
         // جستجو
-        DOM.searchInput.addEventListener('input', _handleSearch);
+        el.searchInput.addEventListener('input', _onSearch);
     }
 
-    /* ----------------------------------------- */
-    /* مدیریت دراگ اند دراپ                        */
-    /* ----------------------------------------- */
+    /* ─── Drag & Drop Setup ─── */
 
-    /**
-     * راه‌اندازی ناحیه دراگ اند دراپ
-     * @param {HTMLElement} dropZone - المنت ناحیه دراپ
-     * @param {HTMLInputElement} fileInput - ورودی فایل
-     * @param {string} type - نوع فایل (followers یا following)
-     */
-    function _setupDropZone(dropZone, fileInput, type) {
-        // جلوگیری از رفتار پیشفرض مرورگر
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (eventName) {
-            dropZone.addEventListener(eventName, function (e) {
+    function _initDropZone(zone, type) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (evt) {
+            zone.addEventListener(evt, function (e) {
                 e.preventDefault();
                 e.stopPropagation();
             });
         });
 
-        // افکت هاور هنگام دراگ
-        ['dragenter', 'dragover'].forEach(function (eventName) {
-            dropZone.addEventListener(eventName, function () {
-                dropZone.classList.add('drag-over');
-            });
+        ['dragenter', 'dragover'].forEach(function (evt) {
+            zone.addEventListener(evt, function () { zone.classList.add('drag-over'); });
         });
 
-        ['dragleave', 'drop'].forEach(function (eventName) {
-            dropZone.addEventListener(eventName, function () {
-                dropZone.classList.remove('drag-over');
-            });
+        ['dragleave', 'drop'].forEach(function (evt) {
+            zone.addEventListener(evt, function () { zone.classList.remove('drag-over'); });
         });
 
-        // مدیریت دراپ فایل
-        dropZone.addEventListener('drop', function (e) {
-            var files = e.dataTransfer.files;
-            if (files.length > 0) {
-                _handleFileUpload(files[0], type);
-            }
+        zone.addEventListener('drop', function (e) {
+            var file = e.dataTransfer.files[0];
+            if (file) _processFile(file, type);
         });
     }
 
-    /* ----------------------------------------- */
-    /* مدیریت آپلود و پارس فایل                    */
-    /* ----------------------------------------- */
+    /* ─── File Processing ─── */
 
     /**
-     * پردازش فایل آپلود شده
-     * @param {File} file - فایل JSON
-     * @param {string} type - نوع (followers | following)
+     * خوندن و پارس کردن فایل JSON
+     * @param {File} file
+     * @param {string} type - 'followers' یا 'following'
      */
-    function _handleFileUpload(file, type) {
-        // بررسی اینکه فایل JSON باشه
-        if (!file) return;
-
-        if (!file.name.endsWith('.json')) {
-            _showToast('فقط فایل JSON قبول میکنم! 🙅‍♂️', 'error');
+    function _processFile(file, type) {
+        if (!file.name.toLowerCase().endsWith('.json')) {
+            _toast('فقط فایل JSON قبوله! 🙅‍♂️', 'error');
             return;
         }
 
@@ -193,609 +151,636 @@
 
         reader.onload = function (e) {
             try {
-                var jsonData = JSON.parse(e.target.result);
-                var usernames = _extractUsernames(jsonData, type);
+                var raw = JSON.parse(e.target.result);
+
+                // لاگ دیباگ: نشون بده فایل چه ساختاری داره
+                _debugLog(type, raw);
+
+                var usernames = _parseUsernames(raw);
 
                 if (usernames.length === 0) {
-                    _showToast('فایل خالیه یا فرمتش درست نیست! 🤔', 'error');
+                    _toast('یوزرنیمی پیدا نشد! فرمت فایل رو چک کن 🤔', 'error');
                     return;
                 }
 
-                // ذخیره داده‌ها
-                if (type === 'followers') {
-                    followersData = usernames;
-                    _updateFileStatus('followers', file.name, usernames.length);
-                    _saveToStorage('followers', usernames);
-                } else {
-                    followingData = usernames;
-                    _updateFileStatus('following', file.name, usernames.length);
-                    _saveToStorage('following', usernames);
-                }
+                // ذخیره
+                state[type] = usernames;
+                _saveToStorage(type, usernames);
+                _setFileLoaded(type, file.name, usernames.length);
+                _updateUI();
 
-                _updateButtonStates();
-                _showToast(
-                    type === 'followers'
-                        ? 'فایل فالوورها لود شد! ' + usernames.length + ' نفر 👥'
-                        : 'فایل فالووینگ‌ها لود شد! ' + usernames.length + ' نفر 👤',
+                _toast(
+                    (type === 'followers' ? '👥 فالوورها: ' : '👤 فالووینگ‌ها: ') +
+                    usernames.length + ' نفر لود شد!',
                     'success'
                 );
 
             } catch (err) {
-                console.error('JSON Parse Error:', err);
-                _showToast('خطا در خوندن فایل! مطمئنی JSON معتبره؟ 😵', 'error');
+                console.error('[FollowAnalyzer] JSON parse error:', err);
+                _toast('فایل JSON معتبر نیست! 😵 ' + err.message, 'error');
             }
         };
 
         reader.onerror = function () {
-            _showToast('خطا در خوندن فایل! 😢', 'error');
+            _toast('خطا در خوندن فایل 😢', 'error');
         };
 
         reader.readAsText(file);
     }
 
+    /* ─── JSON Parser (قلب برنامه!) ─── */
+
     /**
-     * استخراج یوزرنیم‌ها از ساختار JSON اینستاگرام
-     * اینستاگرام فرمت‌های مختلفی داره، این تابع همه رو ساپورت میکنه
-     * 
-     * @param {Object|Array} data - داده JSON
-     * @param {string} type - نوع فایل
-     * @returns {Array<string>} آرایه یوزرنیم‌ها
+     * استخراج یوزرنیم‌ها از هر فرمت JSON اینستاگرام
+     *
+     * فرمت 1 (followers_1.json - آرایه):
+     * [
+     *   { "string_list_data": [{ "value": "username", "href": "...", "timestamp": 123 }] },
+     *   ...
+     * ]
+     *
+     * فرمت 2 (following.json - آبجکت):
+     * {
+     *   "relationships_following": [
+     *     { "string_list_data": [{ "value": "username", "href": "...", "timestamp": 123 }] },
+     *     ...
+     *   ]
+     * }
+     *
+     * @param {*} data - داده خام JSON
+     * @returns {string[]} آرایه یوزرنیم‌های یونیک
      */
-    function _extractUsernames(data, type) {
-        var usernames = [];
+    function _parseUsernames(data) {
+        var results = [];
 
-        try {
-            /**
-             * فرمت جدید اینستاگرام (2024+):
-             * followers_1.json => آرایه‌ای از آبجکت‌هایی با string_list_data
-             * following.json => { relationships_following: [...] }
-             */
+        // ─── مرحله 1: پیدا کردن آرایه اصلی ───
+        var items = _findArray(data);
 
-            // ── فرمت 1: آرایه مستقیم (followers_1.json) ──
-            if (Array.isArray(data)) {
-                data.forEach(function (item) {
-                    var name = _digUsername(item);
-                    if (name) usernames.push(name);
-                });
-            }
-            // ── فرمت 2: آبجکت با کلید relationships_following ──
-            else if (data.relationships_following) {
-                var list = data.relationships_following;
-                if (Array.isArray(list)) {
-                    list.forEach(function (item) {
-                        var name = _digUsername(item);
-                        if (name) usernames.push(name);
-                    });
-                }
-            }
-            // ── فرمت 3: آبجکت با کلید‌های دیگه ──
-            else if (typeof data === 'object') {
-                // سعی میکنیم از هر ساختاری یوزرنیم دربیاریم
-                var keys = Object.keys(data);
-                keys.forEach(function (key) {
-                    if (Array.isArray(data[key])) {
-                        data[key].forEach(function (item) {
-                            var name = _digUsername(item);
-                            if (name) usernames.push(name);
-                        });
-                    }
-                });
-            }
-        } catch (err) {
-            console.error('Extract error:', err);
+        if (!items || items.length === 0) {
+            console.warn('[FollowAnalyzer] هیچ آرایه‌ای پیدا نشد');
+            return [];
         }
 
-        // حذف موارد تکراری
-        return _unique(usernames);
+        console.log('[FollowAnalyzer] تعداد آیتم‌ها پیدا شده:', items.length);
+
+        // ─── مرحله 2: استخراج یوزرنیم از هر آیتم ───
+        for (var i = 0; i < items.length; i++) {
+            var username = _extractUsername(items[i]);
+            if (username) {
+                results.push(username);
+            }
+        }
+
+        // حذف تکراری‌ها
+        return _unique(results);
     }
 
     /**
-     * استخراج یوزرنیم از یک آیتم منفرد
-     * سازگار با ساختارهای مختلف JSON اینستاگرام
-     * 
-     * @param {Object} item - یک آیتم از آرایه
-     * @returns {string|null} یوزرنیم یا null
+     * پیدا کردن آرایه اصلی از داده JSON
+     * مهم نیست فرمت چیه، آرایه رو پیدا میکنه
+     *
+     * @param {*} data
+     * @returns {Array|null}
      */
-    function _digUsername(item) {
-        if (!item) return null;
+    function _findArray(data) {
+        // اگه خودش آرایه‌ست
+        if (Array.isArray(data)) {
+            return data;
+        }
 
-        // ساختار string_list_data (رایج‌ترین)
-        if (item.string_list_data && Array.isArray(item.string_list_data)) {
-            for (var i = 0; i < item.string_list_data.length; i++) {
-                if (item.string_list_data[i].value) {
-                    return item.string_list_data[i].value.toLowerCase().trim();
+        // اگه آبجکته، بگرد دنبال آرایه
+        if (data && typeof data === 'object') {
+            // اول بگرد دنبال کلیدهای معروف
+            var knownKeys = [
+                'relationships_following',
+                'relationships_followers',
+                'followers',
+                'following'
+            ];
+
+            for (var k = 0; k < knownKeys.length; k++) {
+                if (Array.isArray(data[knownKeys[k]])) {
+                    return data[knownKeys[k]];
                 }
             }
-        }
 
-        // ساختار ساده با value
-        if (item.value) {
-            return item.value.toLowerCase().trim();
-        }
-
-        // ساختار با username
-        if (item.username) {
-            return item.username.toLowerCase().trim();
-        }
-
-        // ساختار با name
-        if (item.name) {
-            return item.name.toLowerCase().trim();
-        }
-
-        // ساختار href (بعضی نسخه‌ها لینک میدن)
-        if (item.href || (item.string_list_data && item.string_list_data[0] && item.string_list_data[0].href)) {
-            var href = item.href || item.string_list_data[0].href;
-            // استخراج یوزرنیم از URL
-            var match = href.match(/instagram\.com\/([^\/\?]+)/);
-            if (match) return match[1].toLowerCase().trim();
+            // اگه پیدا نشد، اولین آرایه‌ای که هست رو برگردون
+            var keys = Object.keys(data);
+            for (var j = 0; j < keys.length; j++) {
+                if (Array.isArray(data[keys[j]])) {
+                    return data[keys[j]];
+                }
+            }
         }
 
         return null;
     }
 
-    /* ----------------------------------------- */
-    /* منطق تحلیل و مقایسه                        */
-    /* ----------------------------------------- */
+    /**
+     * استخراج یوزرنیم از یک آیتم منفرد
+     * چندین ساختار مختلف رو چک میکنه
+     *
+     * @param {*} item
+     * @returns {string|null}
+     */
+    function _extractUsername(item) {
+        if (!item || typeof item !== 'object') return null;
+
+        // ── روش 1: string_list_data (رایج‌ترین - 2023 تا 2026) ──
+        if (item.string_list_data && Array.isArray(item.string_list_data)) {
+            for (var i = 0; i < item.string_list_data.length; i++) {
+                var entry = item.string_list_data[i];
+                if (entry && typeof entry.value === 'string' && entry.value.trim() !== '') {
+                    return entry.value.toLowerCase().trim();
+                }
+            }
+            // اگه value نبود از href استخراج کن
+            for (var h = 0; h < item.string_list_data.length; h++) {
+                var href = item.string_list_data[h] && item.string_list_data[h].href;
+                if (href) {
+                    var extracted = _usernameFromUrl(href);
+                    if (extracted) return extracted;
+                }
+            }
+        }
+
+        // ── روش 2: فیلد مستقیم value ──
+        if (typeof item.value === 'string' && item.value.trim() !== '') {
+            return item.value.toLowerCase().trim();
+        }
+
+        // ── روش 3: فیلد username ──
+        if (typeof item.username === 'string' && item.username.trim() !== '') {
+            return item.username.toLowerCase().trim();
+        }
+
+        // ── روش 4: فیلد name ──
+        if (typeof item.name === 'string' && item.name.trim() !== '') {
+            return item.name.toLowerCase().trim();
+        }
+
+        // ── روش 5: فیلد title (بعضی نسخه‌ها) ──
+        if (typeof item.title === 'string' && item.title.trim() !== '') {
+            return item.title.toLowerCase().trim();
+        }
+
+        // ── روش 6: href مستقیم ──
+        if (typeof item.href === 'string') {
+            return _usernameFromUrl(item.href);
+        }
+
+        return null;
+    }
 
     /**
-     * اجرای تحلیل اصلی
-     * مقایسه فالوورها و فالووینگ‌ها
+     * استخراج یوزرنیم از URL اینستاگرام
+     * @param {string} url
+     * @returns {string|null}
      */
-    function _runAnalysis() {
-        if (followersData.length === 0 || followingData.length === 0) return;
+    function _usernameFromUrl(url) {
+        if (!url) return null;
+        var match = url.match(/instagram\.com\/([A-Za-z0-9_.]+)/);
+        return match ? match[1].toLowerCase().trim() : null;
+    }
 
-        // ساخت Set از فالوورها برای جستجوی سریع O(1)
-        var followersSet = new Set(followersData);
-        var followingSet = new Set(followingData);
+    /* ─── Analysis Engine ─── */
 
-        // ── کسایی که فالوشون کردیم ولی فالوبک نکردن ──
-        // (توی فالووینگ هستن ولی توی فالوور نیستن)
-        analysisResults.notFollowingBack = followingData.filter(function (username) {
-            return !followersSet.has(username);
+    function _onAnalyze() {
+        if (state.followers.length === 0 || state.following.length === 0) {
+            _toast('اول هر دو فایل رو آپلود کن! 📁', 'error');
+            return;
+        }
+
+        _showLoading('در حال تحلیل... 🔍');
+
+        setTimeout(function () {
+            _doAnalysis();
+            _displayResults();
+            _hideLoading();
+            _toast('تحلیل انجام شد! ببین کیا بی‌معرفتن 😈', 'success');
+        }, 600);
+    }
+
+    /**
+     * محاسبه اصلی:
+     *
+     * 💔 فالوبک نکرده = فالووینگ - فالوور
+     *    (کسایی که فالوشون کردی ولی اونا فالوت نکردن)
+     *
+     * 🤝 دوطرفه = فالووینگ ∩ فالوور
+     *    (هم فالو کردی هم فالوت کرده)
+     *
+     * 🌟 فن‌ها = فالوور - فالووینگ
+     *    (فالوت کرده ولی تو فالوش نکردی)
+     */
+    function _doAnalysis() {
+        // استفاده از Set برای performance بالا - O(1) lookup
+        var followersSet = new Set(state.followers);
+        var followingSet = new Set(state.following);
+
+        // 💔 فالوبک نکرده: توی following هست ولی توی followers نیست
+        state.results.notFollowingBack = state.following.filter(function (user) {
+            return !followersSet.has(user);
         }).sort();
 
-        // ── فالو دوطرفه ──
-        // (هم فالو کردیم هم فالومون کرده)
-        analysisResults.mutual = followingData.filter(function (username) {
-            return followersSet.has(username);
+        // 🤝 دوطرفه: هم توی following هم توی followers
+        state.results.mutual = state.following.filter(function (user) {
+            return followersSet.has(user);
         }).sort();
 
-        // ── فن‌ها ──
-        // (فالومون کرده ولی ما فالوش نکردیم)
-        analysisResults.fans = followersData.filter(function (username) {
-            return !followingSet.has(username);
+        // 🌟 فن‌ها: توی followers هست ولی توی following نیست
+        state.results.fans = state.followers.filter(function (user) {
+            return !followingSet.has(user);
         }).sort();
 
-        // نمایش نتایج
-        _displayResults();
+        // لاگ نتایج
+        console.log('[FollowAnalyzer] نتایج تحلیل:');
+        console.log('  فالوورها:', state.followers.length);
+        console.log('  فالووینگ‌ها:', state.following.length);
+        console.log('  فالوبک نکرده:', state.results.notFollowingBack.length);
+        console.log('  دوطرفه:', state.results.mutual.length);
+        console.log('  فن‌ها:', state.results.fans.length);
 
         // ذخیره نتایج
-        _saveToStorage('results', analysisResults);
+        _saveToStorage('results', state.results);
     }
 
-    /* ----------------------------------------- */
-    /* نمایش نتایج                                 */
-    /* ----------------------------------------- */
+    /* ─── Display Results ─── */
 
-    /**
-     * نمایش نتایج تحلیل شامل آمار و لیست‌ها
-     */
     function _displayResults() {
-        // نمایش بخش نتایج
-        DOM.resultsSection.style.display = 'block';
+        el.resultsSection.style.display = 'block';
 
-        // محاسبه و نمایش آمار
-        var followersCount = followersData.length;
-        var followingCount = followingData.length;
-        var notBackCount = analysisResults.notFollowingBack.length;
-        var mutualCount = analysisResults.mutual.length;
-        var fansCount = analysisResults.fans.length;
+        var fwrCount = state.followers.length;
+        var fwnCount = state.following.length;
+        var nfbCount = state.results.notFollowingBack.length;
+        var mutCount = state.results.mutual.length;
+        var fanCount = state.results.fans.length;
+        var ratio    = fwnCount > 0 ? Math.round((mutCount / fwnCount) * 100) : 0;
 
-        // نرخ فالوبک: چند درصد از فالووینگ‌ها فالوبک کردن
-        var ratio = followingCount > 0
-            ? Math.round((mutualCount / followingCount) * 100)
-            : 0;
+        // انیمیشن اعداد
+        _countUp(el.statFollowers, fwrCount);
+        _countUp(el.statFollowing, fwnCount);
+        _countUp(el.statNotBack, nfbCount);
+        _countUp(el.statMutual, mutCount);
+        _countUp(el.statFans, fanCount);
+        _countUp(el.statRatio, ratio, '%');
 
-        // انیمیشن شمارنده اعداد
-        _animateCounter(DOM.statFollowers, followersCount);
-        _animateCounter(DOM.statFollowing, followingCount);
-        _animateCounter(DOM.statNotBack, notBackCount);
-        _animateCounter(DOM.statMutual, mutualCount);
-        _animateCounter(DOM.statFans, fansCount);
-        _animateCounter(DOM.statRatio, ratio, '%');
+        // شمارنده تب‌ها
+        el.tabCountNfb.textContent = nfbCount;
+        el.tabCountMutual.textContent = mutCount;
+        el.tabCountFans.textContent = fanCount;
 
-        // پر کردن لیست‌ها
-        _renderList(DOM.listNotFollowingBack, analysisResults.notFollowingBack, '💔');
-        _renderList(DOM.listMutual, analysisResults.mutual, '🤝');
-        _renderList(DOM.listFans, analysisResults.fans, '🌟');
+        // رندر لیست‌ها
+        _renderUserList(el.listNfb, state.results.notFollowingBack);
+        _renderUserList(el.listMutual, state.results.mutual);
+        _renderUserList(el.listFans, state.results.fans);
 
-        // فعال کردن دکمه خروجی
-        DOM.exportBtn.disabled = false;
+        // فعال کردن خروجی
+        el.exportBtn.disabled = false;
 
-        // اسکرول به نتایج
+        // اسکرول
         setTimeout(function () {
-            DOM.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
+            el.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
     }
 
     /**
-     * رندر لیست کاربرها
-     * @param {HTMLElement} container - المنت کانتینر
-     * @param {Array<string>} usernames - آرایه یوزرنیم‌ها
-     * @param {string} emoji - ایموجی تزئینی
+     * رندر لیست کاربرها در DOM
+     * @param {HTMLElement} container
+     * @param {string[]} users
      */
-    function _renderList(container, usernames, emoji) {
+    function _renderUserList(container, users) {
         container.innerHTML = '';
 
-        if (usernames.length === 0) {
+        if (users.length === 0) {
             container.innerHTML =
                 '<div class="empty-message">' +
-                    '<span class="empty-icon">🎉</span>' +
-                    '<p>لیست خالیه! خبر خوبه</p>' +
+                '<span class="empty-icon">🎉</span>' +
+                '<p>لیست خالیه! چه خبر خوبی</p>' +
                 '</div>';
             return;
         }
 
-        // ساخت fragment برای performance بهتر
-        var fragment = document.createDocumentFragment();
+        var frag = document.createDocumentFragment();
 
-        usernames.forEach(function (username, index) {
-            var item = document.createElement('div');
-            item.className = 'user-item';
-            item.dataset.username = username;
+        for (var i = 0; i < users.length; i++) {
+            var user = users[i];
+            var div = document.createElement('div');
+            div.className = 'user-item';
+            div.setAttribute('data-username', user);
 
-            // رنگ آواتار تصادفی ولی ثابت برای هر یوزرنیم
-            var avatarClass = 'avatar-' + ((username.charCodeAt(0) % 6) + 1);
-            var initial = username.charAt(0).toUpperCase();
+            var avatarNum = (user.charCodeAt(0) % 6) + 1;
+            var initial = user.charAt(0).toUpperCase();
 
-            item.innerHTML =
+            div.innerHTML =
                 '<div class="user-info">' +
-                    '<div class="user-avatar ' + avatarClass + '">' + initial + '</div>' +
+                    '<div class="user-avatar avatar-' + avatarNum + '">' + _esc(initial) + '</div>' +
                     '<div>' +
-                        '<div class="user-name">@' + _escapeHtml(username) + '</div>' +
-                        '<a href="https://instagram.com/' + _escapeHtml(username) + '" target="_blank" rel="noopener noreferrer" class="insta-link">' +
-                            '↗ پروفایل اینستاگرام' +
-                        '</a>' +
+                        '<div class="user-name">@' + _esc(user) + '</div>' +
+                        '<a href="https://instagram.com/' + _esc(user) + '" target="_blank" rel="noopener" class="insta-link">↗ instagram.com/' + _esc(user) + '</a>' +
                     '</div>' +
                 '</div>' +
-                '<span class="user-index">' + (index + 1) + '</span>';
+                '<span class="user-index">#' + (i + 1) + '</span>';
 
-            fragment.appendChild(item);
-        });
+            frag.appendChild(div);
+        }
 
-        container.appendChild(fragment);
+        container.appendChild(frag);
     }
 
-    /* ----------------------------------------- */
-    /* انیمیشن شمارنده اعداد                       */
-    /* ----------------------------------------- */
+    /* ─── Count Up Animation ─── */
 
-    /**
-     * انیمیشن شمارش اعداد از 0 تا مقدار مشخص
-     * @param {HTMLElement} element - المنت نمایش عدد
-     * @param {number} target - عدد هدف
-     * @param {string} [suffix=''] - پسوند (مثلاً %)
-     */
-    function _animateCounter(element, target, suffix) {
+    function _countUp(element, target, suffix) {
         suffix = suffix || '';
+        var duration = 1000;
+        var fps = 60;
+        var steps = Math.ceil(duration / (1000 / fps));
+        var step = target / steps;
         var current = 0;
-        var duration = 1200; // میلی‌ثانیه
-        var stepTime = 16; // تقریباً 60fps
-        var steps = Math.ceil(duration / stepTime);
-        var increment = target / steps;
+        var count = 0;
 
         var timer = setInterval(function () {
-            current += increment;
-            if (current >= target) {
+            count++;
+            current += step;
+            if (count >= steps) {
                 current = target;
                 clearInterval(timer);
             }
             element.textContent = Math.round(current) + suffix;
-        }, stepTime);
+        }, 1000 / fps);
     }
 
-    /* ----------------------------------------- */
-    /* مدیریت تب‌ها                                */
-    /* ----------------------------------------- */
+    /* ─── Tab Switching ─── */
 
-    /**
-     * تغییر تب فعال
-     * @param {string} tabId - آیدی تب
-     */
     function _switchTab(tabId) {
-        currentTab = tabId;
+        state.currentTab = tabId;
 
-        // آپدیت دکمه‌های تب
         document.querySelectorAll('.tab-btn').forEach(function (btn) {
             btn.classList.toggle('active', btn.dataset.tab === tabId);
         });
 
-        // آپدیت محتوای تب
-        document.querySelectorAll('.tab-content').forEach(function (content) {
-            content.classList.toggle('active', content.id === 'tab-' + tabId);
+        document.querySelectorAll('.tab-content').forEach(function (tc) {
+            tc.classList.toggle('active', tc.id === 'tab-' + tabId);
         });
 
-        // ریست جستجو
-        DOM.searchInput.value = '';
-        _handleSearch();
+        el.searchInput.value = '';
+        _onSearch();
     }
 
-    /* ----------------------------------------- */
-    /* جستجو در لیست                               */
-    /* ----------------------------------------- */
-    function _handleSearch() {
-        var query = DOM.searchInput.value.toLowerCase().trim();
-        var activeTabContent = document.querySelector('.tab-content.active');
-        
-        if (!activeTabContent) return;
-        
-        var items = activeTabContent.querySelectorAll('.user-item');
+    /* ─── Search ─── */
 
+    function _onSearch() {
+        var q = el.searchInput.value.toLowerCase().trim();
+        var activeContent = document.querySelector('.tab-content.active');
+        if (!activeContent) return;
+
+        var items = activeContent.querySelectorAll('.user-item');
         items.forEach(function (item) {
-            var username = item.dataset.username || '';
-            var match = username.includes(query);
-            item.style.display = match ? '' : 'none';
+            var username = item.getAttribute('data-username') || '';
+            item.style.display = username.indexOf(q) !== -1 ? '' : 'none';
         });
     }
 
-    /* ----------------------------------------- */
-    /* بروزرسانی وضعیت فایل آپلود                  */
-    /* ----------------------------------------- */
+    /* ─── Demo Data Generator ─── */
 
-    /**
-     * بروزرسانی نمایش وضعیت فایل آپلود شده
-     * @param {string} type - نوع فایل
-     * @param {string} fileName - نام فایل
-     * @param {number} count - تعداد کاربرها
-     */
-    function _updateFileStatus(type, fileName, count) {
-        var statusEl = type === 'followers' ? DOM.followersStatus : DOM.followingStatus;
-        var cardEl = type === 'followers' ? DOM.followersCard : DOM.followingCard;
+    function _onDemo() {
+        // ساخت داده تستی با فرمت واقعی اینستاگرام
+        var sampleFollowers = [
+            'ali_dev', 'sara_design', 'reza_code', 'mina_art',
+            'hossein_js', 'nazanin_ui', 'mehdi_php', 'fatemeh_css',
+            'amir_react', 'zahra_vue', 'fan_only_1', 'fan_only_2',
+            'fan_only_3'
+        ];
 
-        statusEl.classList.add('loaded');
-        statusEl.querySelector('.status-text').textContent =
-            '✅ ' + fileName + ' (' + count + ' نفر)';
+        var sampleFollowing = [
+            'ali_dev', 'sara_design', 'reza_code', 'mina_art',
+            'hossein_js', 'nazanin_ui', 'mehdi_php', 'fatemeh_css',
+            'unfollower_1', 'unfollower_2', 'unfollower_3',
+            'unfollower_4', 'unfollower_5'
+        ];
 
-        cardEl.classList.add('loaded');
+        state.followers = sampleFollowers;
+        state.following = sampleFollowing;
+
+        _saveToStorage('followers', sampleFollowers);
+        _saveToStorage('following', sampleFollowing);
+
+        _setFileLoaded('followers', 'داده تستی', sampleFollowers.length);
+        _setFileLoaded('following', 'داده تستی', sampleFollowing.length);
+
+        _updateUI();
+        _toast('داده تستی ساخته شد! حالا دکمه تحلیل رو بزن 🎲', 'info');
     }
 
-    /* ----------------------------------------- */
-    /* مدیریت وضعیت دکمه‌ها                        */
-    /* ----------------------------------------- */
-    function _updateButtonStates() {
-        var bothLoaded = followersData.length > 0 && followingData.length > 0;
-        DOM.analyzeBtn.disabled = !bothLoaded;
-    }
+    /* ─── Export PNG ─── */
 
-    /* ----------------------------------------- */
-    /* ذخیره‌سازی محلی (localStorage)               */
-    /* ----------------------------------------- */
-
-    /**
-     * ذخیره داده در localStorage
-     * @param {string} key - کلید
-     * @param {*} data - داده
-     */
-    function _saveToStorage(key, data) {
-        try {
-            localStorage.setItem('fa_' + key, JSON.stringify(data));
-        } catch (err) {
-            console.warn('Storage save failed:', err);
-        }
-    }
-
-    /**
-     * بارگذاری داده‌ها از localStorage
-     * تا بعد از ریفرش صفحه داده‌ها از دست نرن
-     */
-    function _loadFromStorage() {
-        try {
-            var storedFollowers = localStorage.getItem('fa_followers');
-            var storedFollowing = localStorage.getItem('fa_following');
-
-            if (storedFollowers) {
-                followersData = JSON.parse(storedFollowers);
-                _updateFileStatus('followers', 'از حافظه', followersData.length);
-            }
-
-            if (storedFollowing) {
-                followingData = JSON.parse(storedFollowing);
-                _updateFileStatus('following', 'از حافظه', followingData.length);
-            }
-
-        } catch (err) {
-            console.warn('Storage load failed:', err);
-        }
-    }
-
-    /* ----------------------------------------- */
-    /* پاک کردن همه داده‌ها                        */
-    /* ----------------------------------------- */
-    function _clearAll() {
-        // پاک کردن متغیرها
-        followersData = [];
-        followingData = [];
-        analysisResults = { notFollowingBack: [], mutual: [], fans: [] };
-
-        // پاک کردن localStorage
-        localStorage.removeItem('fa_followers');
-        localStorage.removeItem('fa_following');
-        localStorage.removeItem('fa_results');
-
-        // ریست وضعیت فایل‌ها
-        ['followers', 'following'].forEach(function (type) {
-            var statusEl = type === 'followers' ? DOM.followersStatus : DOM.followingStatus;
-            var cardEl = type === 'followers' ? DOM.followersCard : DOM.followingCard;
-
-            statusEl.classList.remove('loaded');
-            statusEl.querySelector('.status-text').textContent = 'هنوز فایلی انتخاب نشده';
-            cardEl.classList.remove('loaded');
-        });
-
-        // ریست ورودی فایل‌ها
-        DOM.followersInput.value = '';
-        DOM.followingInput.value = '';
-
-        // مخفی کردن نتایج
-        DOM.resultsSection.style.display = 'none';
-
-        // غیرفعال کردن دکمه‌ها
-        DOM.analyzeBtn.disabled = true;
-        DOM.exportBtn.disabled = true;
-
-        // ریست جستجو
-        DOM.searchInput.value = '';
-
-        _showToast('همه چی پاک شد! از اول شروع کن 🧹', 'info');
-    }
-
-    /* ----------------------------------------- */
-    /* خروجی PNG                                   */
-    /* ----------------------------------------- */
-    function _exportPNG() {
+    function _onExport() {
         if (typeof html2canvas === 'undefined') {
-            _showToast('کتابخانه html2canvas لود نشده! 😕', 'error');
+            _toast('html2canvas لود نشده! 😕', 'error');
             return;
         }
 
         _showLoading('در حال ساخت تصویر... 📸');
 
-        // کمی تأخیر تا لودینگ نمایش داده بشه
         setTimeout(function () {
-            html2canvas(DOM.resultsSection, {
+            html2canvas(el.resultsSection, {
                 backgroundColor: '#F8F6F2',
-                scale: 2, // کیفیت بالا
+                scale: 2,
                 useCORS: true,
-                logging: false,
-                borderRadius: '24px',
-                windowWidth: DOM.resultsSection.scrollWidth,
-                windowHeight: DOM.resultsSection.scrollHeight
+                logging: false
             }).then(function (canvas) {
                 _hideLoading();
-
-                // ساخت لینک دانلود
                 var link = document.createElement('a');
-                link.download = 'follow-analysis-' + _getDateString() + '.png';
+                link.download = 'follow-analysis-' + _dateStr() + '.png';
                 link.href = canvas.toDataURL('image/png');
                 link.click();
-
-                _showToast('تصویر ذخیره شد! 🎉', 'success');
+                _toast('تصویر ذخیره شد! 🎉', 'success');
             }).catch(function (err) {
                 _hideLoading();
                 console.error('Export error:', err);
-                _showToast('خطا در ساخت تصویر! 😵', 'error');
+                _toast('خطا در ساخت تصویر! 😵', 'error');
             });
         }, 300);
     }
 
-    /* ----------------------------------------- */
-    /* لودینگ اسپینر                               */
-    /* ----------------------------------------- */
+    /* ─── Clear All ─── */
 
-    /**
-     * نمایش لودینگ
-     * @param {string} message - پیام لودینگ
-     */
-    function _showLoading(message) {
+    function _onClear() {
+        state.followers = [];
+        state.following = [];
+        state.results = { notFollowingBack: [], mutual: [], fans: [] };
+
+        localStorage.removeItem('fa_followers');
+        localStorage.removeItem('fa_following');
+        localStorage.removeItem('fa_results');
+
+        ['followers', 'following'].forEach(function (type) {
+            var statusEl = type === 'followers' ? el.followersStatus : el.followingStatus;
+            var cardEl = type === 'followers' ? el.followersCard : el.followingCard;
+            statusEl.classList.remove('loaded');
+            statusEl.querySelector('.status-text').textContent = 'هنوز فایلی انتخاب نشده';
+            cardEl.classList.remove('loaded');
+        });
+
+        el.followersInput.value = '';
+        el.followingInput.value = '';
+        el.resultsSection.style.display = 'none';
+        el.debugSection.style.display = 'none';
+        el.searchInput.value = '';
+
+        _updateUI();
+        _toast('همه چی پاک شد! 🧹', 'info');
+    }
+
+    /* ─── UI State Updates ─── */
+
+    function _updateUI() {
+        var bothLoaded = state.followers.length > 0 && state.following.length > 0;
+        el.analyzeBtn.disabled = !bothLoaded;
+
+        if (!bothLoaded) {
+            el.exportBtn.disabled = true;
+        }
+    }
+
+    function _setFileLoaded(type, fileName, count) {
+        var statusEl = type === 'followers' ? el.followersStatus : el.followingStatus;
+        var cardEl = type === 'followers' ? el.followersCard : el.followingCard;
+
+        statusEl.classList.add('loaded');
+        statusEl.querySelector('.status-text').textContent =
+            '✅ ' + fileName + ' (' + count + ' نفر)';
+        cardEl.classList.add('loaded');
+    }
+
+    /* ─── Storage (localStorage) ─── */
+
+    function _saveToStorage(key, data) {
+        try {
+            localStorage.setItem('fa_' + key, JSON.stringify(data));
+        } catch (e) {
+            console.warn('[Storage] Save failed:', e);
+        }
+    }
+
+    function _loadFromStorage() {
+        try {
+            var f = localStorage.getItem('fa_followers');
+            var g = localStorage.getItem('fa_following');
+
+            if (f) {
+                state.followers = JSON.parse(f);
+                _setFileLoaded('followers', 'حافظه محلی', state.followers.length);
+            }
+
+            if (g) {
+                state.following = JSON.parse(g);
+                _setFileLoaded('following', 'حافظه محلی', state.following.length);
+            }
+
+            // اگه هر دو بود اتوماتیک تحلیل کن
+            if (state.followers.length > 0 && state.following.length > 0) {
+                _doAnalysis();
+                // با کمی تأخیر نتایج رو نشون بده
+                setTimeout(_displayResults, 100);
+            }
+
+        } catch (e) {
+            console.warn('[Storage] Load failed:', e);
+        }
+    }
+
+    /* ─── Debug Logger ─── */
+
+    function _debugLog(type, rawData) {
+        // فعال کردن بخش دیباگ (برای عیب‌یابی فعال کن)
+        // el.debugSection.style.display = 'block';
+
+        var preview = {};
+        preview.type = type;
+        preview.isArray = Array.isArray(rawData);
+        preview.topLevelKeys = Array.isArray(rawData) ? '(array)' : Object.keys(rawData);
+
+        if (Array.isArray(rawData) && rawData.length > 0) {
+            preview.firstItem = rawData[0];
+            preview.totalItems = rawData.length;
+        } else if (rawData && typeof rawData === 'object') {
+            var keys = Object.keys(rawData);
+            for (var i = 0; i < keys.length; i++) {
+                if (Array.isArray(rawData[keys[i]])) {
+                    preview.arrayKey = keys[i];
+                    preview.arrayLength = rawData[keys[i]].length;
+                    preview.firstItem = rawData[keys[i]][0];
+                    break;
+                }
+            }
+        }
+
+        console.log('[FollowAnalyzer] Debug (' + type + '):', preview);
+    }
+
+    /* ─── UI Helpers ─── */
+
+    function _showLoading(msg) {
         var overlay = document.createElement('div');
         overlay.className = 'loading-overlay';
         overlay.id = 'loading-overlay';
         overlay.innerHTML =
             '<div class="loading-spinner">' +
-                '<div class="spinner-dots">' +
-                    '<span></span><span></span><span></span>' +
-                '</div>' +
-                '<span class="loading-text">' + (message || 'لطفاً صبر کن...') + '</span>' +
+            '<div class="spinner-dots"><span></span><span></span><span></span></div>' +
+            '<span class="loading-text">' + (msg || 'صبر کن...') + '</span>' +
             '</div>';
         document.body.appendChild(overlay);
     }
 
-    /**
-     * مخفی کردن لودینگ
-     */
     function _hideLoading() {
-        var overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-            overlay.style.opacity = '0';
-            setTimeout(function () {
-                overlay.remove();
-            }, 300);
+        var ov = document.getElementById('loading-overlay');
+        if (ov) {
+            ov.style.opacity = '0';
+            ov.style.transition = 'opacity 0.3s';
+            setTimeout(function () { ov.remove(); }, 300);
         }
     }
 
-    /* ----------------------------------------- */
-    /* نوتیفیکیشن Toast                            */
-    /* ----------------------------------------- */
+    function _toast(msg, type) {
+        var old = document.querySelector('.toast');
+        if (old) old.remove();
 
-    /**
-     * نمایش پیام Toast
-     * @param {string} message - متن پیام
-     * @param {string} type - نوع (success|error|info)
-     */
-    function _showToast(message, type) {
-        // حذف توست قبلی
-        var existing = document.querySelector('.toast');
-        if (existing) existing.remove();
+        var t = document.createElement('div');
+        t.className = 'toast ' + (type || 'info');
+        t.textContent = msg;
+        document.body.appendChild(t);
 
-        var toast = document.createElement('div');
-        toast.className = 'toast ' + (type || 'info');
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        // نمایش با کمی تأخیر برای انیمیشن
         requestAnimationFrame(function () {
-            toast.classList.add('show');
+            t.classList.add('show');
         });
 
-        // مخفی کردن بعد از 3 ثانیه
         setTimeout(function () {
-            toast.classList.remove('show');
-            setTimeout(function () {
-                toast.remove();
-            }, 400);
-        }, 3000);
+            t.classList.remove('show');
+            setTimeout(function () { t.remove(); }, 400);
+        }, 3500);
     }
 
-    /* ----------------------------------------- */
-    /* توابع کمکی (Utility)                       */
-    /* ----------------------------------------- */
+    /* ─── Utility Functions ─── */
 
-    /**
-     * حذف آیتم‌های تکراری از آرایه
-     * @param {Array} arr - آرایه ورودی
-     * @returns {Array} آرایه بدون تکرار
-     */
     function _unique(arr) {
         return Array.from(new Set(arr));
     }
 
-    /**
-     * Escape کردن HTML برای جلوگیری از XSS
-     * @param {string} str - رشته ورودی
-     * @returns {string} رشته ایمن
-     */
-    function _escapeHtml(str) {
-        var div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+    function _esc(str) {
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
     }
 
-    /**
-     * ساخت رشته تاریخ برای نام فایل
-     * @returns {string} تاریخ به فرمت YYYY-MM-DD
-     */
-    function _getDateString() {
-        var now = new Date();
-        var y = now.getFullYear();
-        var m = String(now.getMonth() + 1).padStart(2, '0');
-        var d = String(now.getDate()).padStart(2, '0');
-        return y + '-' + m + '-' + d;
+    function _dateStr() {
+        var n = new Date();
+        return n.getFullYear() + '-' +
+            String(n.getMonth() + 1).padStart(2, '0') + '-' +
+            String(n.getDate()).padStart(2, '0');
     }
 
-    /* ----------------------------------------- */
-    /* اجرای برنامه                                */
-    /* ----------------------------------------- */
+    /* ─── Boot ─── */
     document.addEventListener('DOMContentLoaded', init);
 
 })();
