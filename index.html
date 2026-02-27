@@ -4,20 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📊 Follow Analyzer | تحلیلگر فالوورها</title>
-    
-    <!-- فونت وزیرمتن - زیباترین فونت فارسی -->
+
+    <!-- فونت وزیرمتن -->
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
-    
+
     <!-- کتابخانه html2canvas برای خروجی PNG -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
-    <!-- لینک استایل -->
+
+    <!-- استایل -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <!-- ============================================= -->
-    <!-- هدر اصلی اپلیکیشن                              -->
+    <!-- هدر اصلی                                       -->
     <!-- ============================================= -->
     <header class="app-header">
         <div class="header-content">
@@ -30,29 +30,39 @@
     </header>
 
     <!-- ============================================= -->
-    <!-- بخش اصلی محتوا                                 -->
+    <!-- محتوای اصلی                                    -->
     <!-- ============================================= -->
     <main class="main-container">
 
-        <!-- ----------------------------------------- -->
-        <!-- بنتو گرید: بخش آپلود فایل‌ها               -->
-        <!-- ----------------------------------------- -->
+        <!-- بخش آپلود -->
         <section class="bento-grid upload-section">
-            
+
             <!-- کارت راهنما -->
             <div class="glass-card guide-card">
                 <div class="card-icon">📋</div>
                 <h2>راهنمای استفاده</h2>
                 <ol class="guide-steps">
-                    <li>وارد اینستاگرام شو و از <strong>Settings → Your Activity → Download Your Information</strong> دیتاتو بگیر</li>
-                    <li>فرمت <strong>JSON</strong> رو انتخاب کن</li>
-                    <li>فایل <code>followers_1.json</code> رو آپلود کن</li>
-                    <li>فایل <code>following.json</code> رو آپلود کن</li>
-                    <li>دکمه «تحلیل کن» رو بزن و حقیقت رو ببین! 😈</li>
+                    <li>وارد اینستاگرام شو → <strong>Settings → Accounts Center → Your information and permissions → Download your information</strong></li>
+                    <li>گزینه <strong>Download or transfer information</strong> رو بزن</li>
+                    <li>اکانتتو انتخاب کن → <strong>Some of your information</strong> → فقط <strong>Followers and Following</strong> رو تیک بزن</li>
+                    <li>فرمت رو <strong>JSON</strong> بذار و دانلود کن</li>
+                    <li>از فایل زیپ، فایل <code>followers_1.json</code> و <code>following.json</code> رو آپلود کن</li>
+                    <li>دکمه «تحلیل کن» رو بزن و حقیقت تلخ رو ببین! 😈</li>
                 </ol>
             </div>
 
-            <!-- کارت آپلود فالوورها -->
+            <!-- پیش‌نمایش فرمت فایل -->
+            <div class="glass-card preview-card">
+                <div class="card-icon">🧪</div>
+                <h2>تست سریع</h2>
+                <p class="preview-hint">فایل JSON نداری؟ با دکمه زیر یه نمونه تستی بساز و امتحان کن!</p>
+                <button class="btn btn-demo" id="demo-btn">
+                    <span class="btn-icon">🎲</span>
+                    <span class="btn-text">ساخت داده تستی</span>
+                </button>
+            </div>
+
+            <!-- آپلود فالوورها -->
             <div class="neo-card upload-card" id="followers-upload-card">
                 <div class="card-icon">👥</div>
                 <h3>فایل فالوورها</h3>
@@ -70,7 +80,7 @@
                 </div>
             </div>
 
-            <!-- کارت آپلود فالووینگ‌ها -->
+            <!-- آپلود فالووینگ‌ها -->
             <div class="neo-card upload-card" id="following-upload-card">
                 <div class="card-icon">👤</div>
                 <h3>فایل فالووینگ‌ها</h3>
@@ -90,9 +100,7 @@
 
         </section>
 
-        <!-- ----------------------------------------- -->
-        <!-- دکمه‌های عملیاتی                            -->
-        <!-- ----------------------------------------- -->
+        <!-- دکمه‌ها -->
         <section class="action-buttons">
             <button class="btn btn-analyze" id="analyze-btn" disabled>
                 <span class="btn-icon">🚀</span>
@@ -108,15 +116,23 @@
             </button>
         </section>
 
-        <!-- ----------------------------------------- -->
-        <!-- بخش نتایج تحلیل                            -->
-        <!-- ----------------------------------------- -->
-        <section class="results-section" id="results-section" style="display: none;">
+        <!-- ============================================= -->
+        <!-- دیباگ: نمایش داده خام (مخفی بصورت پیشفرض)      -->
+        <!-- ============================================= -->
+        <section class="debug-section" id="debug-section" style="display:none;">
+            <div class="glass-card">
+                <h3>🐛 دیباگ - داده خام</h3>
+                <pre id="debug-output" class="debug-output"></pre>
+            </div>
+        </section>
 
-            <!-- کارت‌های آماری -->
+        <!-- ============================================= -->
+        <!-- بخش نتایج                                      -->
+        <!-- ============================================= -->
+        <section class="results-section" id="results-section" style="display:none;">
+
+            <!-- آمار -->
             <div class="bento-grid stats-grid" id="stats-container">
-
-                <!-- کارت تعداد فالوورها -->
                 <div class="glass-card stat-card stat-followers">
                     <div class="stat-icon">👥</div>
                     <div class="stat-info">
@@ -124,8 +140,6 @@
                         <span class="stat-label">فالوور</span>
                     </div>
                 </div>
-
-                <!-- کارت تعداد فالووینگ‌ها -->
                 <div class="glass-card stat-card stat-following">
                     <div class="stat-icon">👤</div>
                     <div class="stat-info">
@@ -133,8 +147,6 @@
                         <span class="stat-label">فالووینگ</span>
                     </div>
                 </div>
-
-                <!-- کارت فالو بک نکرده‌ها -->
                 <div class="glass-card stat-card stat-not-following-back">
                     <div class="stat-icon">💔</div>
                     <div class="stat-info">
@@ -142,8 +154,6 @@
                         <span class="stat-label">فالوبک نکرده</span>
                     </div>
                 </div>
-
-                <!-- کارت فالوور متقابل -->
                 <div class="glass-card stat-card stat-mutual">
                     <div class="stat-icon">🤝</div>
                     <div class="stat-info">
@@ -151,8 +161,6 @@
                         <span class="stat-label">دوطرفه</span>
                     </div>
                 </div>
-
-                <!-- کارت فن‌ها (فالوورایی که فالوشون نکردی) -->
                 <div class="glass-card stat-card stat-fans">
                     <div class="stat-icon">🌟</div>
                     <div class="stat-info">
@@ -160,8 +168,6 @@
                         <span class="stat-label">فن‌های تو</span>
                     </div>
                 </div>
-
-                <!-- کارت نسبت -->
                 <div class="glass-card stat-card stat-ratio">
                     <div class="stat-icon">📊</div>
                     <div class="stat-info">
@@ -169,33 +175,20 @@
                         <span class="stat-label">نرخ فالوبک</span>
                     </div>
                 </div>
-
             </div>
 
-            <!-- تب‌های نمایش لیست -->
+            <!-- تب‌ها و لیست -->
             <div class="tabs-wrapper">
                 <div class="tabs-header">
-                    <button class="tab-btn active" data-tab="not-following-back">
-                        💔 فالوبک نکرده‌ها
-                    </button>
-                    <button class="tab-btn" data-tab="mutual">
-                        🤝 دوطرفه‌ها
-                    </button>
-                    <button class="tab-btn" data-tab="fans">
-                        🌟 فن‌های تو
-                    </button>
+                    <button class="tab-btn active" data-tab="not-following-back">💔 فالوبک نکرده‌ها (<span class="tab-count" id="tab-count-nfb">0</span>)</button>
+                    <button class="tab-btn" data-tab="mutual">🤝 دوطرفه‌ها (<span class="tab-count" id="tab-count-mutual">0</span>)</button>
+                    <button class="tab-btn" data-tab="fans">🌟 فن‌ها (<span class="tab-count" id="tab-count-fans">0</span>)</button>
                 </div>
-
-                <!-- جستجو -->
                 <div class="search-wrapper">
                     <input type="text" class="search-input" id="search-input" placeholder="🔍 جستجو در لیست...">
                 </div>
-
-                <!-- محتوای تب‌ها -->
                 <div class="tab-content active" id="tab-not-following-back">
-                    <div class="list-container" id="list-not-following-back">
-                        <!-- لیست به صورت داینامیک ساخته میشه -->
-                    </div>
+                    <div class="list-container" id="list-not-following-back"></div>
                 </div>
                 <div class="tab-content" id="tab-mutual">
                     <div class="list-container" id="list-mutual"></div>
@@ -209,15 +202,11 @@
 
     </main>
 
-    <!-- ============================================= -->
-    <!-- فوتر                                           -->
-    <!-- ============================================= -->
+    <!-- فوتر -->
     <footer class="app-footer">
-        <p>ساخته شده با ❤️ و کمی کنجکاوی | Follow Analyzer v2.0</p>
+        <p>ساخته شده با ❤️ و کمی کنجکاوی | Follow Analyzer v2.1</p>
     </footer>
 
-    <!-- اسکریپت اصلی -->
     <script src="script.js"></script>
-
 </body>
 </html>
